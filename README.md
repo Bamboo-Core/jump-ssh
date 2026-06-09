@@ -19,22 +19,28 @@ No cliente, basta um `docker run` (não precisa clonar o repo nem buildar):
     docker run -d --name bastion --restart unless-stopped \
       -p 22222:2222 \
       -e BASTION_PASSWORD='<senha-forte>' \
-      -e BASTION_PERMITOPEN='<IP_PRIVADO_EQUIP>:22' \
       -v bastion_hostkeys:/etc/ssh/keys \
       ghcr.io/bamboo-core/bastion:latest
 
     docker logs bastion        # deve mostrar "Server listening on ... port 2222"
 
+Esse é o modo **múltiplos equipamentos** (padrão): sem `BASTION_PERMITOPEN`, o
+bastion tunela para **qualquer IP que a VM enxergar** na rede do cliente — é o
+modelo clássico de jump host. A segurança vem da **allowlist de firewall**
+(ver seção abaixo): só o IP do `service-netmiko` pode conectar no bastion.
+
 Variáveis de ambiente aceitas:
 
 | Var | Default | Descrição |
 |---|---|---|
-| `BASTION_PASSWORD` | (obrigatória) | senha do usuário do bastion |
+| `BASTION_PASSWORD` | (obrigatória) | senha do usuário do bastion (= a cadastrada no Kuanticks) |
 | `BASTION_USER` | `bastion` | usuário usado pelo `service-netmiko` |
-| `BASTION_PERMITOPEN` | (vazio) | restringe o túnel a `host:port` literais, separados por espaço |
+| `BASTION_PERMITOPEN` | (vazio = qualquer destino) | **opcional**; restringe o túnel a `host:port` **literais** (NÃO aceita CIDR/sub-rede), separados por espaço. Use só quando o conjunto de equipamentos é pequeno e fixo. |
 
 > A porta interna é sempre `2222`; mapeie a externa que quiser (`-p 22222:2222`).
 > O volume `bastion_hostkeys` mantém as host keys estáveis entre restarts.
+> **Para vários equipamentos / rede inteira:** omita `BASTION_PERMITOPEN` (como
+> no comando acima) e proteja o acesso pela allowlist de firewall.
 
 ## Deploy via build local (alternativa)
 
@@ -54,13 +60,19 @@ cada push na `main` e a cada tag `v*`. Para uma release versionada:
     git tag v1.0.0 && git push origin v1.0.0
     # publica ghcr.io/bamboo-core/bastion:v1.0.0 + :latest
 
-## Allowlist de firewall (recomendado)
+## Allowlist de firewall (ESSENCIAL no modo múltiplos equipamentos)
 
-Restringir a porta do bastion ao IP do `service-netmiko` reduz drasticamente
-brute force. Ex. (ufw):
+Sem `BASTION_PERMITOPEN`, o bastion tunela para qualquer host da rede interna —
+então a proteção passa a ser **quem consegue conectar nele**. Restrinja a porta
+do bastion **apenas ao IP do `service-netmiko`**. Ex. (ufw):
 
     sudo ufw allow from <IP_DO_SERVICE_NETMIKO> to any port <BASTION_PORT> proto tcp
     sudo ufw deny <BASTION_PORT>/tcp
+
+Resultado: ninguém de fora alcança o bastion; só o `service-netmiko`
+(autenticado com a senha) entra, e a partir dele chega-se a todos os
+equipamentos da rede. Demais camadas ativas: senha forte, `MaxAuthTries 3`,
+sem shell, sem root.
 
 ## Smoke test do túnel (antes de cadastrar no app)
 
