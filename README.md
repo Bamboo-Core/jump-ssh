@@ -11,13 +11,48 @@ forwarding** (sem shell, sem root).
 2. **bastion → equipamento:** a VM precisa ter **rota até os IPs privados**
    (mesma LAN/VLAN ou roteamento).
 
-## Deploy
+## Deploy via imagem publicada (recomendado)
+
+A imagem é publicada automaticamente no GHCR em `ghcr.io/bamboo-core/bastion`.
+No cliente, basta um `docker run` (não precisa clonar o repo nem buildar):
+
+    docker run -d --name bastion --restart unless-stopped \
+      -p 22222:2222 \
+      -e BASTION_PASSWORD='<senha-forte>' \
+      -e BASTION_PERMITOPEN='<IP_PRIVADO_EQUIP>:22' \
+      -v bastion_hostkeys:/etc/ssh/keys \
+      ghcr.io/bamboo-core/bastion:latest
+
+    docker logs bastion        # deve mostrar "Server listening on ... port 2222"
+
+Variáveis de ambiente aceitas:
+
+| Var | Default | Descrição |
+|---|---|---|
+| `BASTION_PASSWORD` | (obrigatória) | senha do usuário do bastion |
+| `BASTION_USER` | `bastion` | usuário usado pelo `service-netmiko` |
+| `BASTION_PERMITOPEN` | (vazio) | restringe o túnel a `host:port` literais, separados por espaço |
+
+> A porta interna é sempre `2222`; mapeie a externa que quiser (`-p 22222:2222`).
+> O volume `bastion_hostkeys` mantém as host keys estáveis entre restarts.
+
+## Deploy via build local (alternativa)
+
+Se preferir buildar a partir do código (sem usar a imagem publicada):
 
     cp .env.example .env
     # editar .env: definir BASTION_PASSWORD forte, ajustar BASTION_PORT e
     # BASTION_PERMITOPEN conforme a rede do cliente.
     docker compose up -d --build
     docker compose logs --no-log-prefix bastion   # deve mostrar "Server listening on ..."
+
+## Publicação da imagem (mantenedores)
+
+O workflow `.github/workflows/publicar-imagem.yml` builda e publica no GHCR a
+cada push na `main` e a cada tag `v*`. Para uma release versionada:
+
+    git tag v1.0.0 && git push origin v1.0.0
+    # publica ghcr.io/bamboo-core/bastion:v1.0.0 + :latest
 
 ## Allowlist de firewall (recomendado)
 
