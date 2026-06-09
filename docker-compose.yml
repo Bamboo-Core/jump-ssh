@@ -1,7 +1,7 @@
 services:
   bastion:
     build: .
-    container_name: bastion
+    container_name: ${BASTION_NAME:-bastion}
     restart: unless-stopped
     ports:
       - "${BASTION_PORT:-22222}:2222"
