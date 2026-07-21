@@ -11,6 +11,43 @@ forwarding** (sem shell, sem root).
 2. **bastion → equipamento:** a VM precisa ter **rota até os IPs privados**
    (mesma LAN/VLAN ou roteamento).
 
+### ⚠️ Colisão de sub-rede do Docker (causa comum de "No route to host")
+
+O Docker cria bridges auto-atribuindo sub-redes do seu pool padrão
+(`172.17.0.0/16`, `172.18…`, `172.19…`, …). Se **alguma bridge do Docker cair na
+mesma faixa que a rede de gerência do cliente** (ex.: cliente em `172.19.x`), o
+host passa a tratar essa faixa como bridge **local** — e o bastion **nunca roteia
+até o device real** (ARP na bridge → *"No route to host"*), mesmo com a VPN certa.
+Foi exatamente isso que quebrou um cliente em `172.19.x`.
+
+**Fix host-level (PRIMÁRIO — vale para deploy via imagem E via compose):** fixe o
+pool do Docker fora das faixas RFC1918 dos clientes. Em `/etc/docker/daemon.json`:
+
+```json
+{ "default-address-pools": [ { "base": "100.64.0.0/10", "size": 24 } ] }
+```
+
+Depois, **numa janela de manutenção** (isto recria as bridges e reinicia os
+containers da VM):
+
+```bash
+sudo systemctl restart docker
+# recrie as stacks/containers da VM (docker run/compose up) para pegarem a nova faixa
+```
+
+`100.64.0.0/10` é espaço CGNAT (RFC 6598), praticamente nunca usado em LAN de
+device — confirme que **nenhum cliente** dessa VM o utiliza antes de aplicar.
+
+> Correção sem bounce (paliativo, por-cliente): uma rota **mais específica** vence
+> a `/16` do Docker, ex.: `sudo ip route add 172.19.0.0/24 via <gw-vpn> dev <if-vpn>`.
+> Resolve na hora sem reiniciar nada, mas não é durável (some no restart e não vale
+> se o container estiver NA faixa colidida — nesse caso só o fix acima resolve).
+
+**Defesa em profundidade (deploy via compose):** o `docker-compose.yml` já pina a
+rede do bastion via `BASTION_NET_SUBNET` (default `100.64.250.0/24`). Isso protege
+a rede DO bastion, mas **não** impede outra stack da mesma VM de pegar a faixa do
+cliente — por isso o fix host-level acima é o que resolve de vez.
+
 ## Deploy via imagem publicada (recomendado)
 
 A imagem é publicada automaticamente no GHCR em `ghcr.io/bamboo-core/bastion`.

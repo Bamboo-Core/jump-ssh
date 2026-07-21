@@ -3,6 +3,8 @@ services:
     build: .
     container_name: ${BASTION_NAME:-bastion}
     restart: unless-stopped
+    networks:
+      - bastionnet
     ports:
       - "${BASTION_PORT:-22222}:2222"
     environment:
@@ -11,6 +13,20 @@ services:
       BASTION_PERMITOPEN: ${BASTION_PERMITOPEN:-}
     volumes:
       - bastion_hostkeys:/etc/ssh/keys
+
+networks:
+  # Rede do bastion PINADA numa faixa CGNAT (RFC 6598), fora das faixas RFC1918
+  # que os clientes usam para gerência (10/8, 172.16/12, 192.168/16). Sem isso o
+  # Docker auto-escolhe 172.17/172.18/172.19... e pode COLIDIR com a rede real do
+  # cliente (ex.: cliente em 172.19.x). Na colisão, o host trata a faixa do cliente
+  # como bridge local do Docker e o bastion NUNCA roteia até o device ("No route to
+  # host"). Ajuste BASTION_NET_SUBNET se 100.64.x for usado por algum cliente.
+  # OBS: isto cobre o deploy via compose (build local). No deploy via imagem
+  # (docker run), aplique também o fix host-level em /etc/docker/daemon.json — ver README.
+  bastionnet:
+    ipam:
+      config:
+        - subnet: ${BASTION_NET_SUBNET:-100.64.250.0/24}
 
 volumes:
   bastion_hostkeys:
