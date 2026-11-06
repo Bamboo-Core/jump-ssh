@@ -4,6 +4,13 @@ set -eu
 BASTION_USER="${BASTION_USER:-bastion}"
 : "${BASTION_PASSWORD:?BASTION_PASSWORD nao definido (configure no .env)}"
 
+# Compose do NOC liga BASTION_EXIGIR_PERMITOPEN=1: sem lista de destinos o bastion nao sobe
+# (aberto a qualquer destino). Sem a env, o comportamento continua o de antes.
+if [ "${BASTION_EXIGIR_PERMITOPEN:-}" = "1" ] && [ -z "$(printf '%s' "${BASTION_PERMITOPEN:-}" | tr -d '[:space:]')" ]; then
+    echo "BASTION_PERMITOPEN vazio e BASTION_EXIGIR_PERMITOPEN=1: defina os destinos permitidos (host:porta separados por espaco)" >&2
+    exit 1
+fi
+
 # 1. Host keys persistentes (volume montado em /etc/ssh/keys)
 if [ ! -f /etc/ssh/keys/ssh_host_ed25519_key ]; then
     ssh-keygen -q -t ed25519 -N "" -f /etc/ssh/keys/ssh_host_ed25519_key
