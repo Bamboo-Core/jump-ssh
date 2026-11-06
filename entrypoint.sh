@@ -6,7 +6,7 @@ BASTION_USER="${BASTION_USER:-bastion}"
 
 # Compose do NOC liga BASTION_EXIGIR_PERMITOPEN=1: sem lista de destinos o bastion nao sobe
 # (aberto a qualquer destino). Sem a env, o comportamento continua o de antes.
-if [ "${BASTION_EXIGIR_PERMITOPEN:-}" = "1" ] && [ -z "${BASTION_PERMITOPEN:-}" ]; then
+if [ "${BASTION_EXIGIR_PERMITOPEN:-}" = "1" ] && [ -z "$(printf '%s' "${BASTION_PERMITOPEN:-}" | tr -d '[:space:]')" ]; then
     echo "BASTION_PERMITOPEN vazio e BASTION_EXIGIR_PERMITOPEN=1: defina os destinos permitidos (host:porta separados por espaco)" >&2
     exit 1
 fi
